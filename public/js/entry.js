@@ -29,12 +29,83 @@ function editEntry(id) {
     router('entry');
 }
 
-function updatePdfViewer(filename) {
+function updatePdfViewer(files) {
     const container = document.getElementById('pdf-viewer-placeholder');
-    if (filename) {
-        container.innerHTML = `<iframe src="uploads/${filename}" class="pdf-frame"></iframe>`;
+    if (files) {
+        const fileList = Array.isArray(files) ? files : [files];
+
+        if (fileList.length === 0) {
+            container.innerHTML = `<div class="pdf-placeholder"><i class="bi bi-file-earmark-x fs-1 opacity-50"></i><div class="mt-2 opacity-75">Kein Dokument</div></div>`;
+            return;
+        }
+
+        if (fileList.length === 1) {
+            container.innerHTML = `<iframe src="uploads/${fileList[0]}" class="pdf-frame"></iframe>`;
+        } else {
+            // Multiple files: Show selector + current file
+            let options = fileList.map((f, i) => `<option value="${f}">${f}</option>`).join('');
+
+            // Container for selector
+            let selectorHtml = `
+                <div class="p-2 bg-light border-bottom d-flex align-items-center">
+                    <span class="me-2 small fw-bold">Dokument:</span>
+                    <select class="form-select form-select-sm" onchange="document.getElementById('pdf-frame-multi').src='uploads/'+this.value">
+                        ${options}
+                    </select>
+                </div>
+                <iframe id="pdf-frame-multi" src="uploads/${fileList[0]}" class="pdf-frame"></iframe>
+            `;
+            container.innerHTML = selectorHtml;
+        }
+
     } else {
         container.innerHTML = `<div class="pdf-placeholder"><i class="bi bi-file-earmark-x fs-1 opacity-50"></i><div class="mt-2 opacity-75">Kein Dokument</div></div>`;
+    }
+}
+
+async function removeFileFromEntry(entryId, fieldId, filename) {
+    if(!confirm('Datei wirklich löschen?')) return;
+
+    // Find entry
+    const entry = appState.entries.find(e => e.id == entryId);
+    if (!entry) return;
+
+    // Get current files
+    let currentFiles = entry.data[fieldId];
+    if (!currentFiles) return;
+    if (!Array.isArray(currentFiles)) currentFiles = [currentFiles];
+
+    // Filter out the file
+    const newFiles = currentFiles.filter(f => f !== filename);
+
+    // Prepare data update
+    // We reuse saveEntry but we need to send the FULL data object with the modified file list
+    // because saveEntry merges. If we send just the key, it overwrites/merges correctly?
+    // Backend: foreach ($existingData as $key => $val) { if (!isset($jsonData[$key])) $jsonData[$key] = $val; }
+    // This means if we send the key in jsonData, it uses our new value. Perfect.
+
+    const formData = new FormData();
+    formData.append('id', entryId);
+
+    // We only need to send the updated field
+    const updateData = {};
+    updateData[fieldId] = newFiles;
+
+    formData.append('data', JSON.stringify(updateData));
+
+    // Call API
+    await saveEntry(formData);
+
+    // Refresh
+    await fetchData();
+    if(appState.editingEntryId) {
+        loadHistory(appState.editingEntryId);
+        renderEntryForm(); // Re-render form to update list
+
+        // Refresh PDF view
+        const newEntry = appState.entries.find(e => e.id == appState.editingEntryId);
+        if(newEntry && newEntry.data[fieldId]) updatePdfViewer(newEntry.data[fieldId]);
+        else updatePdfViewer(null);
     }
 }
 
@@ -85,10 +156,21 @@ function renderEntryForm() {
 
         if (field.type === 'file') {
             input = document.createElement('input');
-            input.type = 'file'; input.className = 'form-control'; input.name = field.id; input.accept = 'application/pdf';
+            input.type = 'file'; input.className = 'form-control'; input.name = field.id; input.accept = 'application/pdf'; input.multiple = true;
+
             if(val) {
-                const hint = document.createElement('div'); hint.className = "small text-success mt-1"; hint.innerText = "Vorhanden: " + val;
-                wrapper.appendChild(hint);
+                // val can be string or array
+                const files = Array.isArray(val) ? val : [val];
+                const list = document.createElement('ul'); list.className = "list-group mt-2";
+                files.forEach(f => {
+                    const li = document.createElement('li'); li.className = "list-group-item d-flex justify-content-between align-items-center p-1 px-2 small";
+                    li.innerHTML = `<span><i class="bi bi-file-earmark-pdf text-danger me-2"></i>${f}</span>`;
+                    const delBtn = document.createElement('button'); delBtn.className = "btn btn-link text-danger p-0 ms-2"; delBtn.innerHTML = '<i class="bi bi-trash"></i>';
+                    delBtn.onclick = (e) => { e.preventDefault(); removeFileFromEntry(appState.editingEntryId, field.id, f); };
+                    li.appendChild(delBtn);
+                    list.appendChild(li);
+                });
+                wrapper.appendChild(list);
             }
         } else if (field.type === 'textarea') {
             input = document.createElement('textarea'); input.className = "form-control"; input.rows = 3; input.name = field.id; input.value = val;
@@ -125,7 +207,12 @@ async function submitEntry(e) {
     appState.schema.forEach(field => {
         if (field.type === 'file') {
             const fileInput = document.querySelector(`input[name="${field.id}"]`);
-            if (fileInput && fileInput.files.length > 0) formData.append(field.id, fileInput.files[0]);
+            if (fileInput && fileInput.files.length > 0) {
+                // Handle multiple files
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append(field.id + '[]', fileInput.files[i]);
+                }
+            }
         } else if(field.type === 'checkbox') {
             const checked = []; document.querySelectorAll(`input[name="${field.id}[]"]:checked`).forEach(el => checked.push(el.value));
             dataObj[field.id] = checked;

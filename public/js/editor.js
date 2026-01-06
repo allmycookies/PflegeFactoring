@@ -25,7 +25,7 @@ function renderEditorCanvas(){
     if(appState.schema.length===0){c.innerHTML='<div class="text-center text-muted mt-5"><h5>Leer - Elemente hierher ziehen</h5></div>';return;}
     let row=document.createElement('div');row.className='row g-2 editor-row-container';c.appendChild(row);let wSum=0;
     appState.schema.forEach((f,idx)=>{
-        let w=f.width==='100'?100:f.width==='50'?50:f.width==='33'?33.33:f.width==='25'?25:12.5;
+        let w=f.width==='100'?100:f.width==='50'?50:f.width==='33'?33.33:f.width==='25'?25:f.width==='12'?12.5:12.5;
         if(wSum+w>100.1){row=document.createElement('div');row.className='row g-2 editor-row-container';c.appendChild(row);wSum=0;}
         const wrap=document.createElement('div');wrap.className=`w-custom-${f.width}`;wSum+=w;
         let tClass='type-text';if(['money','number','decimal'].includes(f.type))tClass='type-money';if(f.type==='date')tClass='type-date';if(f.type==='file')tClass='type-file';
@@ -65,7 +65,7 @@ function renderProperties(id){
     c.innerHTML=`
         <div class="mb-3"><label class="form-label fw-bold small">Beschriftung</label><input type="text" class="form-control" value="${f.label}" oninput="updateProp('${id}','label',this.value)"></div>
         <div class="mb-3"><label class="form-label fw-bold small">Typ</label><select class="form-select" onchange="updateProp('${id}','type',this.value)">${['text','textarea','money','number','decimal','date','select','radio','checkbox','file'].map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
-        <div class="mb-3"><label class="form-label fw-bold small">Breite</label><div class="btn-group w-100"><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','50')">1/2</button><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','100')">1/1</button></div></div>
+        <div class="mb-3"><label class="form-label fw-bold small">Breite</label><div class="btn-group w-100"><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','12')">1/8</button><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','25')">1/4</button><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','33')">1/3</button><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','50')">1/2</button><button class="btn btn-outline-secondary btn-sm" onclick="updateProp('${id}','width','100')">1/1</button></div></div>
         ${['select','radio','checkbox'].includes(f.type)?`<div class="mb-3"><label class="form-label fw-bold small">Optionen</label><textarea class="form-control" oninput="updateProp('${id}','options',this.value)">${f.options||''}</textarea></div>`:''}
         <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" ${f.dashboardList?'checked':''} onchange="updateProp('${id}','dashboardList',this.checked)"><label class="form-check-label">In Liste</label></div>
         <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" ${f.dashboardFilter?'checked':''} onchange="updateProp('${id}','dashboardFilter',this.checked)"><label class="form-check-label">Als Filter</label></div>

@@ -44,16 +44,50 @@ class EntryController {
         // File Upload
         $fileUploaded = false;
         if (!empty($_FILES)) {
-            foreach ($_FILES as $fieldId => $file) {
-                if ($file['error'] === UPLOAD_ERR_OK) {
-                    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                    if ($ext !== 'pdf') throw new Exception("Nur PDF Dateien erlaubt!");
+            foreach ($_FILES as $fieldId => $fileInfo) {
+                // Determine if it is a single file upload or multiple
+                // Standard structure for single: ['name' => '...', 'type' => '...', ...]
+                // Standard structure for multiple: ['name' => ['...', '...'], 'type' => ['...', '...'], ...]
 
-                    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '', basename($file['name']));
-                    if (move_uploaded_file($file['tmp_name'], $this->uploadDir . $filename)) {
-                        $jsonData[$fieldId] = $filename;
-                        $fileUploaded = true;
+                $filesToProcess = [];
+                if (is_array($fileInfo['name'])) {
+                    // Re-organize the multiple files array
+                    $count = count($fileInfo['name']);
+                    for ($i = 0; $i < $count; $i++) {
+                        $filesToProcess[] = [
+                            'name' => $fileInfo['name'][$i],
+                            'type' => $fileInfo['type'][$i],
+                            'tmp_name' => $fileInfo['tmp_name'][$i],
+                            'error' => $fileInfo['error'][$i],
+                            'size' => $fileInfo['size'][$i]
+                        ];
                     }
+                } else {
+                    $filesToProcess[] = $fileInfo;
+                }
+
+                $newFiles = [];
+                foreach ($filesToProcess as $file) {
+                    if ($file['error'] === UPLOAD_ERR_OK) {
+                        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                        if ($ext !== 'pdf') throw new Exception("Nur PDF Dateien erlaubt!");
+
+                        $filename = time() . '_' . uniqid() . '_' . preg_replace('/[^a-zA-Z0-9\._-]/', '', basename($file['name']));
+                        if (move_uploaded_file($file['tmp_name'], $this->uploadDir . $filename)) {
+                            $newFiles[] = $filename;
+                            $fileUploaded = true;
+                        }
+                    }
+                }
+
+                if (!empty($newFiles)) {
+                    // Append to existing files if any
+                    // Check jsonData first (in case frontend sent explicit list), then existingData
+                    $currentFiles = isset($jsonData[$fieldId]) ? $jsonData[$fieldId] : ($existingData[$fieldId] ?? []);
+                    if (!is_array($currentFiles)) {
+                        $currentFiles = $currentFiles ? [$currentFiles] : [];
+                    }
+                    $jsonData[$fieldId] = array_merge($currentFiles, $newFiles);
                 }
             }
         }
